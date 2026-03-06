@@ -4,6 +4,7 @@ const ctx = canvas.getContext('2d');
 let audioCtx = null;
 let platforms = [];
 let particles = [];
+let clouds = []; // 雲の配列
 let playerX = 80; 
 let playerY, playerVY;
 let playerSize = 35;
@@ -20,7 +21,38 @@ const jumpPower = -15;
 const gameSpeed = 14;  
 const worldScale = 0.7;
 
-// --- 音声生成関数 ---
+// --- 雲クラス ---
+class Cloud {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.baseY = y;
+        this.speed = Math.random() * 0.5 + 0.2; // ゆっくり流れる
+        this.w = Math.random() * 40 + 60;
+        this.offset = Math.random() * Math.PI * 2; // 揺れの位相
+    }
+    update() {
+        this.x -= this.speed;
+        // 画面左端に消えたら右から出す
+        const viewW = canvas.width / worldScale;
+        if (this.x < -150) {
+            this.x = viewW + 150;
+            this.baseY = Math.random() * 250 + 50;
+        }
+        // 上下にたゆたう動き
+        this.y = this.baseY + Math.sin(Date.now() * 0.002 + this.offset) * 15;
+    }
+    draw(ctx) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y, 40, 25, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x + 20, this.y + 10, 35, 20, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x - 20, this.y + 10, 35, 20, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// --- 音声生成 ---
 function playSound(type) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const now = audioCtx.currentTime;
@@ -114,6 +146,10 @@ class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
 function init() {
     resize(); resetGame();
+    // 初期の雲を生成
+    for (let i = 0; i < 8; i++) {
+        clouds.push(new Cloud(Math.random() * (canvas.width / worldScale), Math.random() * 250 + 50));
+    }
     window.addEventListener('resize', resize);
     const triggerJump = (e) => { if (e.type === 'touchstart') e.preventDefault(); handleJump(); };
     window.addEventListener('touchstart', triggerJump, { passive: false });
@@ -125,7 +161,7 @@ function resize() { canvas.width = window.innerWidth; canvas.height = window.inn
 
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
-    scoreScale = 1; // スケールを即座にリセットしてバグ防止
+    scoreScale = 1; 
     platforms = []; particles = [];
     const viewH = canvas.height / worldScale;
     platforms.push(new Platform(0, viewH - 150, (canvas.width / worldScale) + 500));
@@ -158,6 +194,9 @@ function update() {
     if (isGameOver) return;
     scrollX += gameSpeed;
     score = Math.floor(scrollX / 10);
+
+    // 雲の更新
+    clouds.forEach(c => c.update());
 
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
         playSound('milestone1000'); spawnCelebration('1000');
@@ -197,6 +236,10 @@ function draw() {
 
     ctx.save();
     ctx.scale(worldScale, worldScale);
+
+    // 雲の描画
+    clouds.forEach(c => c.draw(ctx));
+
     ctx.save();
     ctx.translate(-scrollX, 0);
     ctx.fillStyle = '#649664';
@@ -212,13 +255,12 @@ function draw() {
     ctx.restore();
     ctx.restore();
 
-    // スコア表示 (日本語化・バグ修正)
+    // スコア表示
     ctx.save();
     ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
     ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    // スケール変更の基準点を文字の開始位置にするための調整
     ctx.translate(20, 30);
     ctx.scale(scoreScale, scoreScale);
     ctx.fillText(`スコア: ${score}`, 0, 0);
