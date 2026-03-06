@@ -14,24 +14,27 @@ let lastMilestone = 0;
 let jumpCount = 0;
 let rotation = 0;
 let isGameOver = false;
-let isStarted = false; // スタート画面フラグ
-let scoreScale = 1; 
+let isStarted = false;
+let scoreScale = 1;
 
-const gravity = 0.8;
-const jumpPower = -15; 
-const gameSpeed = 14;  
+// デルタタイム用変数
+let lastTime = 0;
+
+// 物理パラメータ (1秒あたりの値に調整)
+const gravity = 1500; 
+const jumpPower = -700; 
+const gameSpeed = 500;  
 const worldScale = 0.7;
 
-// --- 雲クラス ---
 class Cloud {
     constructor(x, y) {
         this.x = x; this.y = y; this.baseY = y;
-        this.speed = Math.random() * 0.5 + 0.2;
+        this.speed = Math.random() * 30 + 10;
         this.offset = Math.random() * Math.PI * 2;
     }
-    update() {
+    update(dt) {
         const viewW = canvas.width / worldScale;
-        this.x -= this.speed;
+        this.x -= this.speed * dt;
         if (this.x < -150) {
             this.x = viewW + 150;
             this.baseY = Math.random() * 250 + 50;
@@ -48,7 +51,6 @@ class Cloud {
     }
 }
 
-// --- 音声生成 ---
 function playSound(type) {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const now = audioCtx.currentTime;
@@ -107,15 +109,20 @@ class Particle {
     constructor(x, y, color, type) {
         this.x = x; this.y = y;
         const speedMult = type === '1000' ? 1 : 0.4;
-        this.vx = (Math.random() - 0.5) * 20 * speedMult;
-        this.vy = (Math.random() - 0.5) * 20 * speedMult;
+        this.vx = (Math.random() - 0.5) * 600 * speedMult;
+        this.vy = (Math.random() - 0.5) * 600 * speedMult;
         this.size = Math.random() * (type === '1000' ? 10 : 5) + 2;
         this.color = color;
         this.life = 1.0;
     }
-    update() { this.x += this.vx; this.y += this.vy; this.vy += 0.4; this.life -= 0.025; }
+    update(dt) { 
+        this.x += this.vx * dt; 
+        this.y += this.vy * dt; 
+        this.vy += 1200 * dt; 
+        this.life -= 1.0 * dt; 
+    }
     draw(ctx) {
-        ctx.save(); ctx.globalAlpha = this.life;
+        ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.size, this.size);
         ctx.restore();
@@ -153,7 +160,10 @@ function init() {
     requestAnimationFrame(gameLoop);
 }
 
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function resize() { 
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight; 
+}
 
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
@@ -178,7 +188,6 @@ function generatePlatform() {
 
 function handleAction() {
     if (!isStarted) {
-        // スタート！最初のジャンプを兼ねる
         isStarted = true;
         playerVY = jumpPower;
         jumpCount = 1;
@@ -192,13 +201,11 @@ function handleAction() {
     }
 }
 
-function update() {
-    // 雲は常に動かす
-    clouds.forEach(c => c.update());
-
+function update(dt) {
+    clouds.forEach(c => c.update(dt));
     if (!isStarted || isGameOver) return;
 
-    scrollX += gameSpeed;
+    scrollX += gameSpeed * dt;
     score = Math.floor(scrollX / 10);
 
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
@@ -208,17 +215,17 @@ function update() {
         playSound('milestone100'); spawnCelebration('100');
         scoreScale = 1.3; lastMilestone = score;
     }
-    scoreScale += (1 - scoreScale) * 0.1; 
+    scoreScale += (1 - scoreScale) * 10 * dt; 
 
-    playerVY += gravity;
-    playerY += playerVY;
-    rotation = jumpCount === 2 ? rotation + 0.4 : 0;
+    playerVY += gravity * dt;
+    playerY += playerVY * dt;
+    rotation = jumpCount === 2 ? rotation + 20 * dt : 0;
 
     const viewH = canvas.height / worldScale;
     platforms.forEach(p => {
         let px = p.x - scrollX;
         if (playerX + playerSize/2 > px && playerX - playerSize/2 < px + p.w) {
-            if (playerVY >= 0 && playerY + playerSize/2 <= p.y + playerVY + 12 && playerY + playerSize/2 >= p.y - 12) {
+            if (playerVY >= 0 && playerY + playerSize/2 <= p.y + playerVY * dt + 15 && playerY + playerSize/2 >= p.y - 15) {
                 if (playerVY > 0) playSound('land');
                 playerY = p.y - playerSize/2; playerVY = 0; jumpCount = 0;
             }
@@ -230,12 +237,15 @@ function update() {
         playSound('gameover');
     }
     if (platforms[platforms.length - 1].x - scrollX < (canvas.width / worldScale)) generatePlatform();
-    particles = particles.filter(p => { p.update(); return p.life > 0; });
+    particles = particles.filter(p => { p.update(dt); return p.life > 0; });
 }
 
 function draw() {
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 画面幅に基づいたフォントサイズの計算 (1000px幅で48px程度)
+    const baseFontSize = canvas.width * 0.05;
 
     ctx.save();
     ctx.scale(worldScale, worldScale);
@@ -256,25 +266,22 @@ function draw() {
     ctx.restore();
     ctx.restore();
 
-    // UIレイヤー
     if (!isStarted) {
-        // スタート画面
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'center';
-        ctx.font = 'bold 54px sans-serif';
-        ctx.fillText('箱跳び', canvas.width / 2, canvas.height / 2 - 40);
-        ctx.font = '24px sans-serif';
-        ctx.fillText('タップしてスタート', canvas.width / 2, canvas.height / 2 + 40);
+        ctx.font = `bold ${baseFontSize * 1.5}px sans-serif`;
+        ctx.fillText('箱跳び', canvas.width / 2, canvas.height / 2 - baseFontSize);
+        ctx.font = `${baseFontSize * 0.6}px sans-serif`;
+        ctx.fillText('タップしてスタート', canvas.width / 2, canvas.height / 2 + baseFontSize);
     } else {
-        // スコア表示
         ctx.save();
         ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
-        ctx.font = 'bold 28px sans-serif';
+        ctx.font = `bold ${baseFontSize * 0.7}px sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.translate(20, 30);
+        ctx.translate(20, 20);
         ctx.scale(scoreScale, scoreScale);
         ctx.fillText(`スコア: ${score}`, 0, 0);
         ctx.restore();
@@ -284,14 +291,23 @@ function draw() {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#FFF';
             ctx.textAlign = 'center';
-            ctx.font = 'bold 48px sans-serif';
-            ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 30);
-            ctx.font = '24px sans-serif';
-            ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
-            ctx.fillText('タップしてリトライ', canvas.width / 2, canvas.height / 2 + 80);
+            ctx.font = `bold ${baseFontSize * 1.2}px sans-serif`;
+            ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - baseFontSize);
+            ctx.font = `${baseFontSize * 0.6}px sans-serif`;
+            ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + baseFontSize * 0.2);
+            ctx.fillText('タップしてリトライ', canvas.width / 2, canvas.height / 2 + baseFontSize * 1.5);
         }
     }
 }
 
-function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+function gameLoop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // 最大0.1秒（フリーズ対策）
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
 init();
