@@ -6,11 +6,9 @@ let platforms = [];
 let particles = [];
 let clouds = [];
 
-// 内部基準サイズ（この幅をベースにすべてを計算）
 const baseWidth = 1000;
 let renderScale = 1;
 
-// ゲーム状態
 let playerX = 120; 
 let playerY, playerVY;
 const playerSize = 40;
@@ -24,10 +22,14 @@ let isStarted = false;
 let scoreScale = 1;
 let lastTime = 0;
 
-// 物理パラメータ（1秒あたりのpx数：baseWidth基準）
+// 速度管理
+const initialSpeed = 550; // 開始時の速度
+let currentSpeed = initialSpeed;
+const acceleration = 0.15; // 1秒あたりの加算速度（この値が「勘づかれない」絶妙なラインです）
+const maxSpeed = 2400;    // スピードの上限
+
 const gravity = 1800; 
 const jumpPower = -750; 
-const gameSpeed = 550;  
 const worldScale = 0.7;
 
 class Cloud {
@@ -39,7 +41,7 @@ class Cloud {
     update(dt) {
         this.x -= this.speed * dt;
         if (this.x < -200) {
-            this.x = baseWidth / worldScale + 200;
+            this.x = (baseWidth / worldScale) + 200;
             this.baseY = Math.random() * 300 + 50;
         }
         this.y = this.baseY + Math.sin(Date.now() * 0.002 + this.offset) * 20;
@@ -138,19 +140,17 @@ function spawnCelebration(type) {
 class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
 function resize() { 
-    // 画面いっぱいにキャンバスを広げるが、内部的にはbaseWidthを基準にする
     const dpr = window.devicePixelRatio || 1;
     canvas.width = window.innerWidth * dpr;
     canvas.height = window.innerHeight * dpr;
     canvas.style.width = window.innerWidth + 'px';
     canvas.style.height = window.innerHeight + 'px';
-    
-    // 描画倍率の計算
     renderScale = (canvas.width / dpr) / baseWidth;
 }
 
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
+    currentSpeed = initialSpeed; // スピードのリセット
     scoreScale = 1; platforms = []; particles = [];
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     
@@ -163,7 +163,11 @@ function resetGame() {
 function generatePlatform() {
     let last = platforms[platforms.length - 1];
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
-    let gap = Math.random() * 320 + 180;
+    
+    // スピードに合わせて足場の間隔を調整（詰み防止）
+    const speedFactor = currentSpeed / initialSpeed;
+    let gap = (Math.random() * 320 + 180) * speedFactor;
+    
     let newX = last.x + last.w + gap;
     let newW = Math.random() * 450 + 200;
     let newY = Math.max(virtualHeight * 0.35, Math.min(virtualHeight - 200, last.y + (Math.random() * 300 - 150)));
@@ -185,7 +189,12 @@ function update(dt) {
     clouds.forEach(c => c.update(dt));
     if (!isStarted || isGameOver) return;
 
-    scrollX += gameSpeed * dt;
+    // スピードの漸増
+    if (currentSpeed < maxSpeed) {
+        currentSpeed += acceleration;
+    }
+
+    scrollX += currentSpeed * dt;
     score = Math.floor(scrollX / 10);
 
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
@@ -219,15 +228,15 @@ function update(dt) {
 
 function draw() {
     const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // DPRリセット
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, baseWidth * renderScale, (window.innerHeight));
     
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, baseWidth * renderScale, window.innerHeight);
 
     ctx.save();
-    ctx.scale(renderScale, renderScale); // 画面幅に合わせた全体スケール
-    ctx.scale(worldScale, worldScale); // 「引き」のスケール
+    ctx.scale(renderScale, renderScale);
+    ctx.scale(worldScale, worldScale);
 
     clouds.forEach(c => c.draw(ctx));
 
@@ -247,7 +256,6 @@ function draw() {
     ctx.restore();
     ctx.restore();
 
-    // UI (論理座標 baseWidth=1000 に基づいて配置)
     const uiScale = renderScale;
     ctx.save();
     ctx.scale(uiScale, uiScale);
