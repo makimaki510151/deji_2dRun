@@ -5,9 +5,15 @@ let audioCtx = null;
 let platforms = [];
 let particles = [];
 let clouds = [];
-let playerX = 80; 
+
+// 内部基準サイズ（この幅をベースにすべてを計算）
+const baseWidth = 1000;
+let renderScale = 1;
+
+// ゲーム状態
+let playerX = 120; 
 let playerY, playerVY;
-let playerSize = 35;
+const playerSize = 40;
 let scrollX = 0;
 let score = 0;
 let lastMilestone = 0;
@@ -16,37 +22,34 @@ let rotation = 0;
 let isGameOver = false;
 let isStarted = false;
 let scoreScale = 1;
-
-// デルタタイム用変数
 let lastTime = 0;
 
-// 物理パラメータ (1秒あたりの値に調整)
-const gravity = 1500; 
-const jumpPower = -700; 
-const gameSpeed = 500;  
+// 物理パラメータ（1秒あたりのpx数：baseWidth基準）
+const gravity = 1800; 
+const jumpPower = -750; 
+const gameSpeed = 550;  
 const worldScale = 0.7;
 
 class Cloud {
     constructor(x, y) {
         this.x = x; this.y = y; this.baseY = y;
-        this.speed = Math.random() * 30 + 10;
+        this.speed = Math.random() * 40 + 20;
         this.offset = Math.random() * Math.PI * 2;
     }
     update(dt) {
-        const viewW = canvas.width / worldScale;
         this.x -= this.speed * dt;
-        if (this.x < -150) {
-            this.x = viewW + 150;
-            this.baseY = Math.random() * 250 + 50;
+        if (this.x < -200) {
+            this.x = baseWidth / worldScale + 200;
+            this.baseY = Math.random() * 300 + 50;
         }
-        this.y = this.baseY + Math.sin(Date.now() * 0.002 + this.offset) * 15;
+        this.y = this.baseY + Math.sin(Date.now() * 0.002 + this.offset) * 20;
     }
     draw(ctx) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         ctx.beginPath();
-        ctx.ellipse(this.x, this.y, 40, 25, 0, 0, Math.PI * 2);
-        ctx.ellipse(this.x + 20, this.y + 10, 35, 20, 0, 0, Math.PI * 2);
-        ctx.ellipse(this.x - 20, this.y + 10, 35, 20, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x, this.y, 50, 30, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x + 25, this.y + 15, 45, 25, 0, 0, Math.PI * 2);
+        ctx.ellipse(this.x - 25, this.y + 15, 45, 25, 0, 0, Math.PI * 2);
         ctx.fill();
     }
 }
@@ -60,66 +63,56 @@ function playSound(type) {
 
     if (type === 'jump1') {
         osc.type = 'square';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.exponentialRampToValueAtTime(500, now + 0.08);
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(550, now + 0.1);
         gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-        osc.start(); osc.stop(now + 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(); osc.stop(now + 0.1);
     } else if (type === 'jump2') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
         gain.gain.setValueAtTime(0.08, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
         osc.start(); osc.stop(now + 0.15);
     } else if (type === 'land') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(100, now);
-        gain.gain.setValueAtTime(0.03, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.05);
-        osc.start(); osc.stop(now + 0.05);
+        osc.frequency.setValueAtTime(120, now);
+        gain.gain.setValueAtTime(0.04, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.06);
+        osc.start(); osc.stop(now + 0.06);
     } else if (type === 'milestone100') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(523, now);
-        osc.frequency.exponentialRampToValueAtTime(659, now + 0.1);
-        gain.gain.setValueAtTime(0.05, now);
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.1);
+        gain.gain.setValueAtTime(0.06, now);
         gain.gain.linearRampToValueAtTime(0, now + 0.2);
         osc.start(); osc.stop(now + 0.2);
-    } else if (type === 'milestone1000') {
-        [523, 659, 783, 1046].forEach((f, i) => {
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g); g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(f, now + i * 0.08);
-            g.gain.setValueAtTime(0.06, now + i * 0.08);
-            g.gain.linearRampToValueAtTime(0, now + i * 0.08 + 0.3);
-            o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.3);
-        });
     } else if (type === 'gameover') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(220, now);
-        osc.frequency.linearRampToValueAtTime(55, now + 0.5);
+        osc.frequency.linearRampToValueAtTime(55, now + 0.6);
         gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.5);
-        osc.start(); osc.stop(now + 0.5);
+        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+        osc.start(); osc.stop(now + 0.6);
     }
 }
 
 class Particle {
     constructor(x, y, color, type) {
         this.x = x; this.y = y;
-        const speedMult = type === '1000' ? 1 : 0.4;
-        this.vx = (Math.random() - 0.5) * 600 * speedMult;
-        this.vy = (Math.random() - 0.5) * 600 * speedMult;
-        this.size = Math.random() * (type === '1000' ? 10 : 5) + 2;
+        const speedMult = type === '1000' ? 1.2 : 0.5;
+        this.vx = (Math.random() - 0.5) * 800 * speedMult;
+        this.vy = (Math.random() - 0.5) * 800 * speedMult;
+        this.size = Math.random() * 10 + 4;
         this.color = color;
         this.life = 1.0;
     }
     update(dt) { 
         this.x += this.vx * dt; 
         this.y += this.vy * dt; 
-        this.vy += 1200 * dt; 
-        this.life -= 1.0 * dt; 
+        this.vy += 1500 * dt; 
+        this.life -= 1.2 * dt; 
     }
     draw(ctx) {
         ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
@@ -131,12 +124,11 @@ class Particle {
 
 function spawnCelebration(type) {
     const colors = type === '1000' ? ['#FFD700', '#FF69B4', '#00FF7F', '#1E90FF'] : ['#FFF'];
-    const count = type === '1000' ? 80 : 12;
-    const viewW = canvas.width / worldScale;
+    const count = type === '1000' ? 100 : 15;
     for (let i = 0; i < count; i++) {
         particles.push(new Particle(
-            type === '1000' ? Math.random() * viewW : playerX + scrollX,
-            type === '1000' ? -20 : playerY,
+            type === '1000' ? Math.random() * (baseWidth / worldScale) : playerX + scrollX,
+            type === '1000' ? -50 : playerY,
             colors[Math.floor(Math.random() * colors.length)],
             type
         ));
@@ -145,58 +137,46 @@ function spawnCelebration(type) {
 
 class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
-function init() {
-    resize(); resetGame();
-    for (let i = 0; i < 8; i++) {
-        clouds.push(new Cloud(Math.random() * (canvas.width / worldScale), Math.random() * 250 + 50));
-    }
-    window.addEventListener('resize', resize);
-    const triggerInput = (e) => { 
-        if (e.type === 'touchstart') e.preventDefault(); 
-        handleAction(); 
-    };
-    window.addEventListener('touchstart', triggerInput, { passive: false });
-    window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleAction(); });
-    requestAnimationFrame(gameLoop);
-}
-
 function resize() { 
-    canvas.width = window.innerWidth; 
-    canvas.height = window.innerHeight; 
+    // 画面いっぱいにキャンバスを広げるが、内部的にはbaseWidthを基準にする
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    
+    // 描画倍率の計算
+    renderScale = (canvas.width / dpr) / baseWidth;
 }
 
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
-    scoreScale = 1; 
-    platforms = []; particles = [];
-    const viewH = canvas.height / worldScale;
-    platforms.push(new Platform(0, viewH - 150, (canvas.width / worldScale) + 500));
-    playerY = viewH - 150 - playerSize / 2;
+    scoreScale = 1; platforms = []; particles = [];
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+    
+    platforms.push(new Platform(0, virtualHeight - 200, (baseWidth / worldScale) + 600));
+    playerY = virtualHeight - 200 - playerSize / 2;
     playerVY = 0; jumpCount = 0; isGameOver = false;
     for (let i = 0; i < 5; i++) generatePlatform();
 }
 
 function generatePlatform() {
     let last = platforms[platforms.length - 1];
-    const viewH = canvas.height / worldScale;
-    let gap = Math.random() * 300 + 150;
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+    let gap = Math.random() * 320 + 180;
     let newX = last.x + last.w + gap;
-    let newW = Math.random() * 400 + 200;
-    let newY = Math.max(viewH * 0.3, Math.min(viewH - 150, last.y + (Math.random() * 250 - 125)));
+    let newW = Math.random() * 450 + 200;
+    let newY = Math.max(virtualHeight * 0.35, Math.min(virtualHeight - 200, last.y + (Math.random() * 300 - 150)));
     platforms.push(new Platform(newX, newY, newW));
 }
 
 function handleAction() {
     if (!isStarted) {
-        isStarted = true;
-        playerVY = jumpPower;
-        jumpCount = 1;
-        playSound('jump1');
+        isStarted = true; playerVY = jumpPower; jumpCount = 1; playSound('jump1');
     } else if (isGameOver) {
         resetGame();
     } else if (jumpCount < 2) {
-        playerVY = jumpPower;
-        jumpCount++;
+        playerVY = jumpPower; jumpCount++;
         playSound(jumpCount === 1 ? 'jump1' : 'jump2');
     }
 }
@@ -213,48 +193,49 @@ function update(dt) {
         scoreScale = 1.8; lastMilestone = score;
     } else if (Math.floor(score / 100) > Math.floor(lastMilestone / 100)) {
         playSound('milestone100'); spawnCelebration('100');
-        scoreScale = 1.3; lastMilestone = score;
+        scoreScale = 1.4; lastMilestone = score;
     }
-    scoreScale += (1 - scoreScale) * 10 * dt; 
+    scoreScale += (1 - scoreScale) * 12 * dt; 
 
     playerVY += gravity * dt;
     playerY += playerVY * dt;
-    rotation = jumpCount === 2 ? rotation + 20 * dt : 0;
+    rotation = jumpCount === 2 ? rotation + 22 * dt : 0;
 
-    const viewH = canvas.height / worldScale;
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     platforms.forEach(p => {
         let px = p.x - scrollX;
         if (playerX + playerSize/2 > px && playerX - playerSize/2 < px + p.w) {
-            if (playerVY >= 0 && playerY + playerSize/2 <= p.y + playerVY * dt + 15 && playerY + playerSize/2 >= p.y - 15) {
+            if (playerVY >= 0 && playerY + playerSize/2 <= p.y + playerVY * dt + 20 && playerY + playerSize/2 >= p.y - 20) {
                 if (playerVY > 0) playSound('land');
                 playerY = p.y - playerSize/2; playerVY = 0; jumpCount = 0;
             }
         }
     });
 
-    if (playerY > viewH + 100) {
-        isGameOver = true;
-        playSound('gameover');
-    }
-    if (platforms[platforms.length - 1].x - scrollX < (canvas.width / worldScale)) generatePlatform();
+    if (playerY > virtualHeight + 200) { isGameOver = true; playSound('gameover'); }
+    if (platforms[platforms.length - 1].x - scrollX < (baseWidth / worldScale)) generatePlatform();
     particles = particles.filter(p => { p.update(dt); return p.life > 0; });
 }
 
 function draw() {
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // DPRリセット
+    ctx.clearRect(0, 0, baseWidth * renderScale, (window.innerHeight));
+    
     ctx.fillStyle = '#87CEEB';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 画面幅に基づいたフォントサイズの計算 (1000px幅で48px程度)
-    const baseFontSize = canvas.width * 0.05;
+    ctx.fillRect(0, 0, baseWidth * renderScale, window.innerHeight);
 
     ctx.save();
-    ctx.scale(worldScale, worldScale);
+    ctx.scale(renderScale, renderScale); // 画面幅に合わせた全体スケール
+    ctx.scale(worldScale, worldScale); // 「引き」のスケール
+
     clouds.forEach(c => c.draw(ctx));
 
     ctx.save();
     ctx.translate(-scrollX, 0);
     ctx.fillStyle = '#649664';
-    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, (canvas.height / worldScale) - p.y + 500));
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, virtualHeight - p.y + 600));
     particles.forEach(p => p.draw(ctx));
     ctx.restore();
 
@@ -266,47 +247,64 @@ function draw() {
     ctx.restore();
     ctx.restore();
 
+    // UI (論理座標 baseWidth=1000 に基づいて配置)
+    const uiScale = renderScale;
+    ctx.save();
+    ctx.scale(uiScale, uiScale);
+
     if (!isStarted) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'center';
-        ctx.font = `bold ${baseFontSize * 1.5}px sans-serif`;
-        ctx.fillText('箱跳び', canvas.width / 2, canvas.height / 2 - baseFontSize);
-        ctx.font = `${baseFontSize * 0.6}px sans-serif`;
-        ctx.fillText('タップしてスタート', canvas.width / 2, canvas.height / 2 + baseFontSize);
+        ctx.font = 'bold 80px sans-serif';
+        ctx.fillText('箱跳び', baseWidth / 2, (window.innerHeight / renderScale) / 2 - 40);
+        ctx.font = '30px sans-serif';
+        ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / renderScale) / 2 + 60);
     } else {
         ctx.save();
+        ctx.translate(30, 40);
+        ctx.scale(scoreScale, scoreScale);
         ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
-        ctx.font = `bold ${baseFontSize * 0.7}px sans-serif`;
+        ctx.font = 'bold 36px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.translate(20, 20);
-        ctx.scale(scoreScale, scoreScale);
         ctx.fillText(`スコア: ${score}`, 0, 0);
         ctx.restore();
 
         if (isGameOver) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
             ctx.fillStyle = '#FFF';
             ctx.textAlign = 'center';
-            ctx.font = `bold ${baseFontSize * 1.2}px sans-serif`;
-            ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - baseFontSize);
-            ctx.font = `${baseFontSize * 0.6}px sans-serif`;
-            ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + baseFontSize * 0.2);
-            ctx.fillText('タップしてリトライ', canvas.width / 2, canvas.height / 2 + baseFontSize * 1.5);
+            ctx.font = 'bold 60px sans-serif';
+            ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / renderScale) / 2 - 40);
+            ctx.font = '30px sans-serif';
+            ctx.fillText(`最終スコア: ${score}`, baseWidth / 2, (window.innerHeight / renderScale) / 2 + 30);
+            ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / renderScale) / 2 + 100);
         }
     }
+    ctx.restore();
 }
 
 function gameLoop(timestamp) {
     if (!lastTime) lastTime = timestamp;
-    const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // 最大0.1秒（フリーズ対策）
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
-
     update(dt);
     draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function init() {
+    resize(); resetGame();
+    for (let i = 0; i < 8; i++) {
+        clouds.push(new Cloud(Math.random() * (baseWidth / worldScale), Math.random() * 300 + 50));
+    }
+    window.addEventListener('resize', () => { resize(); });
+    const trigger = (e) => { if (e.type === 'touchstart') e.preventDefault(); handleAction(); };
+    window.addEventListener('touchstart', trigger, { passive: false });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleAction(); });
     requestAnimationFrame(gameLoop);
 }
 
