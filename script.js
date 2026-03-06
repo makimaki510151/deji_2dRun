@@ -4,7 +4,7 @@ const ctx = canvas.getContext('2d');
 let audioCtx = null;
 let platforms = [];
 let particles = [];
-let clouds = []; // 雲の配列
+let clouds = [];
 let playerX = 80; 
 let playerY, playerVY;
 let playerSize = 35;
@@ -14,6 +14,7 @@ let lastMilestone = 0;
 let jumpCount = 0;
 let rotation = 0;
 let isGameOver = false;
+let isStarted = false; // スタート画面フラグ
 let scoreScale = 1; 
 
 const gravity = 0.8;
@@ -24,22 +25,17 @@ const worldScale = 0.7;
 // --- 雲クラス ---
 class Cloud {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.baseY = y;
-        this.speed = Math.random() * 0.5 + 0.2; // ゆっくり流れる
-        this.w = Math.random() * 40 + 60;
-        this.offset = Math.random() * Math.PI * 2; // 揺れの位相
+        this.x = x; this.y = y; this.baseY = y;
+        this.speed = Math.random() * 0.5 + 0.2;
+        this.offset = Math.random() * Math.PI * 2;
     }
     update() {
-        this.x -= this.speed;
-        // 画面左端に消えたら右から出す
         const viewW = canvas.width / worldScale;
+        this.x -= this.speed;
         if (this.x < -150) {
             this.x = viewW + 150;
             this.baseY = Math.random() * 250 + 50;
         }
-        // 上下にたゆたう動き
         this.y = this.baseY + Math.sin(Date.now() * 0.002 + this.offset) * 15;
     }
     draw(ctx) {
@@ -58,8 +54,7 @@ function playSound(type) {
     const now = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(audioCtx.destination);
 
     if (type === 'jump1') {
         osc.type = 'square';
@@ -120,8 +115,7 @@ class Particle {
     }
     update() { this.x += this.vx; this.y += this.vy; this.vy += 0.4; this.life -= 0.025; }
     draw(ctx) {
-        ctx.save();
-        ctx.globalAlpha = this.life;
+        ctx.save(); ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
         ctx.fillRect(this.x, this.y, this.size, this.size);
         ctx.restore();
@@ -146,14 +140,16 @@ class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
 function init() {
     resize(); resetGame();
-    // 初期の雲を生成
     for (let i = 0; i < 8; i++) {
         clouds.push(new Cloud(Math.random() * (canvas.width / worldScale), Math.random() * 250 + 50));
     }
     window.addEventListener('resize', resize);
-    const triggerJump = (e) => { if (e.type === 'touchstart') e.preventDefault(); handleJump(); };
-    window.addEventListener('touchstart', triggerJump, { passive: false });
-    window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleJump(); });
+    const triggerInput = (e) => { 
+        if (e.type === 'touchstart') e.preventDefault(); 
+        handleAction(); 
+    };
+    window.addEventListener('touchstart', triggerInput, { passive: false });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Space') handleAction(); });
     requestAnimationFrame(gameLoop);
 }
 
@@ -180,8 +176,14 @@ function generatePlatform() {
     platforms.push(new Platform(newX, newY, newW));
 }
 
-function handleJump() {
-    if (isGameOver) {
+function handleAction() {
+    if (!isStarted) {
+        // スタート！最初のジャンプを兼ねる
+        isStarted = true;
+        playerVY = jumpPower;
+        jumpCount = 1;
+        playSound('jump1');
+    } else if (isGameOver) {
         resetGame();
     } else if (jumpCount < 2) {
         playerVY = jumpPower;
@@ -191,12 +193,13 @@ function handleJump() {
 }
 
 function update() {
-    if (isGameOver) return;
+    // 雲は常に動かす
+    clouds.forEach(c => c.update());
+
+    if (!isStarted || isGameOver) return;
+
     scrollX += gameSpeed;
     score = Math.floor(scrollX / 10);
-
-    // 雲の更新
-    clouds.forEach(c => c.update());
 
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
         playSound('milestone1000'); spawnCelebration('1000');
@@ -236,8 +239,6 @@ function draw() {
 
     ctx.save();
     ctx.scale(worldScale, worldScale);
-
-    // 雲の描画
     clouds.forEach(c => c.draw(ctx));
 
     ctx.save();
@@ -255,27 +256,40 @@ function draw() {
     ctx.restore();
     ctx.restore();
 
-    // スコア表示
-    ctx.save();
-    ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.translate(20, 30);
-    ctx.scale(scoreScale, scoreScale);
-    ctx.fillText(`スコア: ${score}`, 0, 0);
-    ctx.restore();
-
-    if (isGameOver) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    // UIレイヤー
+    if (!isStarted) {
+        // スタート画面
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'center';
-        ctx.font = 'bold 48px sans-serif';
-        ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 30);
+        ctx.font = 'bold 54px sans-serif';
+        ctx.fillText('SQUARE JUMP', canvas.width / 2, canvas.height / 2 - 40);
         ctx.font = '24px sans-serif';
-        ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
-        ctx.fillText('タップしてリトライ', canvas.width / 2, canvas.height / 2 + 80);
+        ctx.fillText('タップしてスタート', canvas.width / 2, canvas.height / 2 + 40);
+    } else {
+        // スコア表示
+        ctx.save();
+        ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.translate(20, 30);
+        ctx.scale(scoreScale, scoreScale);
+        ctx.fillText(`スコア: ${score}`, 0, 0);
+        ctx.restore();
+
+        if (isGameOver) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#FFF';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 48px sans-serif';
+            ctx.fillText('ゲームオーバー', canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = '24px sans-serif';
+            ctx.fillText(`最終スコア: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
+            ctx.fillText('タップしてリトライ', canvas.width / 2, canvas.height / 2 + 80);
+        }
     }
 }
 
