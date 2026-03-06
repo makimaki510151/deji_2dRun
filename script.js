@@ -22,11 +22,10 @@ let isStarted = false;
 let scoreScale = 1;
 let lastTime = 0;
 
-// 速度管理
-const initialSpeed = 550; // 開始時の速度
+const initialSpeed = 550;
 let currentSpeed = initialSpeed;
-const acceleration = 0.15; // 1秒あたりの加算速度（この値が「勘づかれない」絶妙なラインです）
-const maxSpeed = 2400;    // スピードの上限
+const acceleration = 0.15;
+const maxSpeed = 1200;
 
 const gravity = 1800; 
 const jumpPower = -750; 
@@ -64,38 +63,28 @@ function playSound(type) {
     osc.connect(gain); gain.connect(audioCtx.destination);
 
     if (type === 'jump1') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(220, now);
+        osc.type = 'square'; osc.frequency.setValueAtTime(220, now);
         osc.frequency.exponentialRampToValueAtTime(550, now + 0.1);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
         osc.start(); osc.stop(now + 0.1);
     } else if (type === 'jump2') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(440, now);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(440, now);
         osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
         osc.start(); osc.stop(now + 0.15);
     } else if (type === 'land') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(120, now);
-        gain.gain.setValueAtTime(0.04, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.06);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(120, now);
+        gain.gain.setValueAtTime(0.04, now); gain.gain.linearRampToValueAtTime(0, now + 0.06);
         osc.start(); osc.stop(now + 0.06);
     } else if (type === 'milestone100') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, now);
         osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.1);
-        gain.gain.setValueAtTime(0.06, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.2);
+        gain.gain.setValueAtTime(0.06, now); gain.gain.linearRampToValueAtTime(0, now + 0.2);
         osc.start(); osc.stop(now + 0.2);
     } else if (type === 'gameover') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(220, now);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(220, now);
         osc.frequency.linearRampToValueAtTime(55, now + 0.6);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.6);
+        gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.6);
         osc.start(); osc.stop(now + 0.6);
     }
 }
@@ -107,19 +96,15 @@ class Particle {
         this.vx = (Math.random() - 0.5) * 800 * speedMult;
         this.vy = (Math.random() - 0.5) * 800 * speedMult;
         this.size = Math.random() * 10 + 4;
-        this.color = color;
-        this.life = 1.0;
+        this.color = color; this.life = 1.0;
     }
     update(dt) { 
-        this.x += this.vx * dt; 
-        this.y += this.vy * dt; 
-        this.vy += 1500 * dt; 
-        this.life -= 1.2 * dt; 
+        this.x += this.vx * dt; this.y += this.vy * dt; 
+        this.vy += 1500 * dt; this.life -= 1.2 * dt; 
     }
     draw(ctx) {
         ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.size, this.size);
         ctx.restore();
     }
 }
@@ -150,12 +135,16 @@ function resize() {
 
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
-    currentSpeed = initialSpeed; // スピードのリセット
+    currentSpeed = initialSpeed;
     scoreScale = 1; platforms = []; particles = [];
-    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     
-    platforms.push(new Platform(0, virtualHeight - 200, (baseWidth / worldScale) + 600));
-    playerY = virtualHeight - 200 - playerSize / 2;
+    // 中央の座標を基準に設定
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+    const centerY = virtualHeight / 2;
+    
+    // 最初の足場を中央付近に配置
+    platforms.push(new Platform(0, centerY, (baseWidth / worldScale) + 600));
+    playerY = centerY - playerSize / 2;
     playerVY = 0; jumpCount = 0; isGameOver = false;
     for (let i = 0; i < 5; i++) generatePlatform();
 }
@@ -163,14 +152,18 @@ function resetGame() {
 function generatePlatform() {
     let last = platforms[platforms.length - 1];
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+    const centerY = virtualHeight / 2;
     
-    // スピードに合わせて足場の間隔を調整（詰み防止）
     const speedFactor = currentSpeed / initialSpeed;
     let gap = (Math.random() * 320 + 180) * speedFactor;
     
     let newX = last.x + last.w + gap;
     let newW = Math.random() * 450 + 200;
-    let newY = Math.max(virtualHeight * 0.35, Math.min(virtualHeight - 200, last.y + (Math.random() * 300 - 150)));
+    
+    // 画面中央から上下に±20%程度の範囲でランダムにする
+    let range = virtualHeight * 0.2;
+    let newY = Math.max(centerY - range, Math.min(centerY + range, last.y + (Math.random() * 260 - 130)));
+    
     platforms.push(new Platform(newX, newY, newW));
 }
 
@@ -189,10 +182,7 @@ function update(dt) {
     clouds.forEach(c => c.update(dt));
     if (!isStarted || isGameOver) return;
 
-    // スピードの漸増
-    if (currentSpeed < maxSpeed) {
-        currentSpeed += acceleration;
-    }
+    if (currentSpeed < maxSpeed) currentSpeed += acceleration;
 
     scrollX += currentSpeed * dt;
     score = Math.floor(scrollX / 10);
@@ -244,7 +234,7 @@ function draw() {
     ctx.translate(-scrollX, 0);
     ctx.fillStyle = '#649664';
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
-    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, virtualHeight - p.y + 600));
+    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, virtualHeight - p.y + 1000));
     particles.forEach(p => p.draw(ctx));
     ctx.restore();
 
@@ -299,8 +289,7 @@ function gameLoop(timestamp) {
     if (!lastTime) lastTime = timestamp;
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
-    update(dt);
-    draw();
+    update(dt); draw();
     requestAnimationFrame(gameLoop);
 }
 
