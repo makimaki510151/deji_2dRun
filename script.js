@@ -264,7 +264,7 @@ function draw() {
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'center';
         ctx.font = 'bold 54px sans-serif';
-        ctx.fillText('SQUARE JUMP', canvas.width / 2, canvas.height / 2 - 40);
+        ctx.fillText('箱跳び', canvas.width / 2, canvas.height / 2 - 40);
         ctx.font = '24px sans-serif';
         ctx.fillText('タップしてスタート', canvas.width / 2, canvas.height / 2 + 40);
     } else {
