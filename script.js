@@ -6,8 +6,9 @@ let platforms = [];
 let particles = [];
 let clouds = [];
 let shootingStars = [];
-let ufos = []; // UFO用配列
+let ufos = [];
 
+// 基準となる幅（この値を小さくするか、計算後のスケールを倍にすることでサイズ感を調整）
 const baseWidth = 1000;
 let renderScale = 1;
 
@@ -58,24 +59,20 @@ class UFO {
     update(dt) {
         this.x -= this.speed * dt;
         this.time += dt;
-        // 浮遊感を出すための上下揺れ
         this.offsetY = Math.sin(this.time * 3) * 15;
         if (this.x < -150) this.active = false;
     }
     draw(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y + this.offsetY);
-        // UFO本体（銀色の円盤）
         ctx.fillStyle = '#C0C0C0';
         ctx.beginPath();
         ctx.ellipse(0, 0, 40, 15, 0, 0, Math.PI * 2);
         ctx.fill();
-        // キャノピー（窓部分）
         ctx.fillStyle = 'rgba(135, 206, 250, 0.8)';
         ctx.beginPath();
         ctx.ellipse(0, -5, 15, 10, 0, 0, Math.PI * 2);
         ctx.fill();
-        // 下部のライト
         const colors = ['#FF0000', '#00FF00', '#FFFF00'];
         const color = colors[Math.floor(Date.now() / 200) % 3];
         ctx.fillStyle = color;
@@ -233,7 +230,8 @@ function resize() {
     canvas.height = window.innerHeight * dpr;
     canvas.style.width = window.innerWidth + 'px';
     canvas.style.height = window.innerHeight + 'px';
-    renderScale = (canvas.width / dpr) / baseWidth;
+    // 前回のサイズ感の2倍にするため、baseWidthに対する比率を2倍にする
+    renderScale = ((canvas.width / dpr) / baseWidth) * 2;
 }
 
 function resetGame() {
@@ -277,14 +275,12 @@ function update(dt) {
     if (!isStarted || isGameOver) return;
     
     const s = score % 2000;
-    // 流れ星
     if (s >= 1100 && s <= 1400) {
         if (Math.random() < 0.08) shootingStars.push(new ShootingStar());
     }
     shootingStars.forEach(star => star.update(dt));
     shootingStars = shootingStars.filter(star => star.active);
 
-    // UFOの出現設定（スコア3100〜3400の間）
     if (score >= 3100 && score <= 3400) {
         if (ufos.length === 0 && Math.random() < 0.02) {
             ufos.push(new UFO());
@@ -326,9 +322,9 @@ function update(dt) {
 function draw() {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, baseWidth * renderScale, (window.innerHeight));
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     ctx.fillStyle = getSkyColor(score);
-    ctx.fillRect(0, 0, baseWidth * renderScale, window.innerHeight);
+    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     ctx.save();
     ctx.scale(renderScale, renderScale);
     ctx.scale(worldScale, worldScale);
@@ -365,18 +361,20 @@ function draw() {
     }
     ctx.restore();
     ctx.restore();
-    const uiScale = renderScale;
+
+    // UIのスケールは元の基準（画面幅に合わせる）に戻して描画
+    const uiScale = renderScale / 2;
     ctx.save();
     ctx.scale(uiScale, uiScale);
     if (!isStarted) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
+        ctx.fillRect(0, 0, baseWidth, window.innerHeight / uiScale);
         ctx.fillStyle = '#FFF';
         ctx.textAlign = 'center';
         ctx.font = 'bold 80px sans-serif';
-        ctx.fillText('箱跳び', baseWidth / 2, (window.innerHeight / renderScale) / 2 - 40);
+        ctx.fillText('箱跳び', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
         ctx.font = '30px sans-serif';
-        ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / renderScale) / 2 + 60);
+        ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 60);
     } else {
         ctx.save();
         ctx.translate(30, 40);
@@ -390,14 +388,14 @@ function draw() {
         ctx.restore();
         if (isGameOver) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
+            ctx.fillRect(0, 0, baseWidth, window.innerHeight / uiScale);
             ctx.fillStyle = '#FFF';
             ctx.textAlign = 'center';
             ctx.font = 'bold 60px sans-serif';
-            ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / renderScale) / 2 - 40);
+            ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
             ctx.font = '30px sans-serif';
-            ctx.fillText(`最終スコア: ${score}`, baseWidth / 2, (window.innerHeight / renderScale) / 2 + 30);
-            ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / renderScale) / 2 + 100);
+            ctx.fillText(`最終スコア: ${score}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 100);
         }
     }
     ctx.restore();
