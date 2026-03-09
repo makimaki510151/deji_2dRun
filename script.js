@@ -5,6 +5,8 @@ let audioCtx = null;
 let platforms = [];
 let particles = [];
 let clouds = [];
+let shootingStars = [];
+let ufos = []; // UFO用配列
 
 const baseWidth = 1000;
 let renderScale = 1;
@@ -21,7 +23,7 @@ let isGameOver = false;
 let isStarted = false;
 let scoreScale = 1;
 let lastTime = 0;
-let flashAlpha = 0; // フラッシュ演出用
+let flashAlpha = 0;
 
 const initialSpeed = 550;
 let currentSpeed = initialSpeed;
@@ -32,9 +34,86 @@ const gravity = 1800;
 const jumpPower = -750;
 const worldScale = 0.7;
 
-// 画像アセット
 const playerImage = new Image();
 playerImage.src = 'player.png';
+
+function getSkyColor(currentScore) {
+    const cycle = 2000;
+    const s = currentScore % cycle;
+    if (s < 500) return '#87CEEB';
+    if (s < 1000) return '#FF8C00';
+    if (s < 1500) return '#191970';
+    return '#E0FFFF';
+}
+
+class UFO {
+    constructor() {
+        const virtualWidth = (baseWidth / worldScale);
+        this.x = virtualWidth + 100;
+        this.y = Math.random() * 200 + 50;
+        this.speed = Math.random() * 150 + 100;
+        this.active = true;
+        this.time = 0;
+    }
+    update(dt) {
+        this.x -= this.speed * dt;
+        this.time += dt;
+        // 浮遊感を出すための上下揺れ
+        this.offsetY = Math.sin(this.time * 3) * 15;
+        if (this.x < -150) this.active = false;
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y + this.offsetY);
+        // UFO本体（銀色の円盤）
+        ctx.fillStyle = '#C0C0C0';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 40, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // キャノピー（窓部分）
+        ctx.fillStyle = 'rgba(135, 206, 250, 0.8)';
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 15, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // 下部のライト
+        const colors = ['#FF0000', '#00FF00', '#FFFF00'];
+        const color = colors[Math.floor(Date.now() / 200) % 3];
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(-15, 5, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 7, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(15, 5, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+}
+
+class ShootingStar {
+    constructor() {
+        this.reset();
+    }
+    reset() {
+        const virtualWidth = (baseWidth / worldScale);
+        this.x = Math.random() * (virtualWidth + 400);
+        this.y = Math.random() * -200;
+        this.len = Math.random() * 80 + 40;
+        this.speed = Math.random() * 800 + 600;
+        this.vX = -this.speed;
+        this.vY = this.speed * 0.5;
+        this.active = true;
+    }
+    update(dt) {
+        this.x += this.vX * dt;
+        this.y += this.vY * dt;
+        if (this.y > 600 || this.x < -100) this.active = false;
+    }
+    draw(ctx) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - this.vX * 0.05, this.y - this.vY * 0.05);
+        ctx.stroke();
+    }
+}
 
 class Cloud {
     constructor(x, y) {
@@ -97,7 +176,6 @@ function playSound(type) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
-
     if (type === 'jump1') {
         osc.type = 'square'; osc.frequency.setValueAtTime(220, now);
         osc.frequency.exponentialRampToValueAtTime(550, now + 0.1);
@@ -140,7 +218,6 @@ function spawnCelebration(type) {
     const colors = isSuper ? ['#FFD700', '#FF69B4', '#00FF7F', '#1E90FF', '#FFFFFF'] : ['#FFF'];
     const count = isSuper ? 120 : 15;
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
-
     for (let i = 0; i < count; i++) {
         const x = isSuper ? (Math.random() * (baseWidth / worldScale)) : playerX + scrollX;
         const y = isSuper ? virtualHeight : playerY;
@@ -162,7 +239,7 @@ function resize() {
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
     currentSpeed = initialSpeed;
-    scoreScale = 1; platforms = []; particles = []; flashAlpha = 0;
+    scoreScale = 1; platforms = []; particles = []; flashAlpha = 0; shootingStars = []; ufos = [];
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     const centerY = virtualHeight / 2;
     platforms.push(new Platform(0, centerY, (baseWidth / worldScale) + 600));
@@ -198,12 +275,27 @@ function handleAction() {
 function update(dt) {
     clouds.forEach(c => c.update(dt));
     if (!isStarted || isGameOver) return;
+    
+    const s = score % 2000;
+    // 流れ星
+    if (s >= 1100 && s <= 1400) {
+        if (Math.random() < 0.08) shootingStars.push(new ShootingStar());
+    }
+    shootingStars.forEach(star => star.update(dt));
+    shootingStars = shootingStars.filter(star => star.active);
+
+    // UFOの出現設定（スコア3100〜3400の間）
+    if (score >= 3100 && score <= 3400) {
+        if (ufos.length === 0 && Math.random() < 0.02) {
+            ufos.push(new UFO());
+        }
+    }
+    ufos.forEach(u => u.update(dt));
+    ufos = ufos.filter(u => u.active);
 
     if (currentSpeed < maxSpeed) currentSpeed += acceleration;
-
     scrollX += currentSpeed * dt;
     score = Math.floor(scrollX / 10);
-
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
         playSound('milestone1000'); spawnCelebration('1000');
         scoreScale = 2.0; lastMilestone = score;
@@ -212,11 +304,9 @@ function update(dt) {
         scoreScale = 1.4; lastMilestone = score;
     }
     scoreScale += (1 - scoreScale) * 12 * dt;
-
     playerVY += gravity * dt;
     playerY += playerVY * dt;
     rotation = jumpCount === 2 ? rotation + 22 * dt : 0;
-
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     platforms.forEach(p => {
         let px = p.x - scrollX;
@@ -227,7 +317,6 @@ function update(dt) {
             }
         }
     });
-
     if (playerY > virtualHeight + 200) { isGameOver = true; playSound('gameover'); }
     if (platforms[platforms.length - 1].x - scrollX < (baseWidth / worldScale)) generatePlatform();
     particles = particles.filter(p => { p.update(dt); return p.life > 0; });
@@ -238,24 +327,33 @@ function draw() {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, baseWidth * renderScale, (window.innerHeight));
-
-    ctx.fillStyle = '#87CEEB';
+    ctx.fillStyle = getSkyColor(score);
     ctx.fillRect(0, 0, baseWidth * renderScale, window.innerHeight);
-
     ctx.save();
     ctx.scale(renderScale, renderScale);
     ctx.scale(worldScale, worldScale);
-
+    
+    shootingStars.forEach(star => star.draw(ctx));
+    ufos.forEach(u => u.draw(ctx));
+    
     clouds.forEach(c => c.draw(ctx));
-
     ctx.save();
     ctx.translate(-scrollX, 0);
-    ctx.fillStyle = '#649664';
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
-    platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, virtualHeight - p.y + 1000));
+    platforms.forEach(p => {
+        ctx.fillStyle = '#649664';
+        ctx.fillRect(p.x, p.y, p.w, virtualHeight - p.y + 1000);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+        for (let ix = 0; ix < p.w; ix += 14) {
+            for (let iy = 0; iy < (virtualHeight - p.y + 200); iy += 14) {
+                if ((Math.sin(p.x + ix) * Math.cos(p.y + iy) * 10000 % 1) > 0.4) {
+                    ctx.fillRect(p.x + ix, p.y + iy, 4, 4);
+                }
+            }
+        }
+    });
     particles.forEach(p => p.draw(ctx));
     ctx.restore();
-
     ctx.save();
     ctx.translate(playerX, playerY);
     ctx.rotate(rotation);
@@ -267,11 +365,9 @@ function draw() {
     }
     ctx.restore();
     ctx.restore();
-
     const uiScale = renderScale;
     ctx.save();
     ctx.scale(uiScale, uiScale);
-
     if (!isStarted) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
         ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
@@ -285,13 +381,13 @@ function draw() {
         ctx.save();
         ctx.translate(30, 40);
         ctx.scale(scoreScale, scoreScale);
-        ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : '#000';
+        const s = score % 2000;
+        ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : (s >= 1000 && s < 1500 ? '#FFF' : '#000');
         ctx.font = 'bold 36px sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(`スコア: ${score}`, 0, 0);
         ctx.restore();
-
         if (isGameOver) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, baseWidth, window.innerHeight / renderScale);
