@@ -9,7 +9,7 @@ let clouds = [];
 const baseWidth = 1000;
 let renderScale = 1;
 
-let playerX = 120; 
+let playerX = 120;
 let playerY, playerVY;
 const playerSize = 40;
 let scrollX = 0;
@@ -21,15 +21,20 @@ let isGameOver = false;
 let isStarted = false;
 let scoreScale = 1;
 let lastTime = 0;
+let flashAlpha = 0; // フラッシュ演出用
 
 const initialSpeed = 550;
 let currentSpeed = initialSpeed;
 const acceleration = 0.15;
 const maxSpeed = 1200;
 
-const gravity = 1800; 
-const jumpPower = -750; 
+const gravity = 1800;
+const jumpPower = -750;
 const worldScale = 0.7;
+
+// 画像アセット
+const playerImage = new Image();
+playerImage.src = 'player.png';
 
 class Cloud {
     constructor(x, y) {
@@ -52,6 +57,37 @@ class Cloud {
         ctx.ellipse(this.x + 25, this.y + 15, 45, 25, 0, 0, Math.PI * 2);
         ctx.ellipse(this.x - 25, this.y + 15, 45, 25, 0, 0, Math.PI * 2);
         ctx.fill();
+    }
+}
+
+class Particle {
+    constructor(x, y, color, type) {
+        this.x = x; this.y = y;
+        const isSuper = type === '1000';
+        const speedMult = isSuper ? 2.5 : 0.6;
+        this.vx = (Math.random() - 0.5) * 1000 * speedMult;
+        this.vy = isSuper ? (Math.random() * -1800 - 500) : (Math.random() - 0.5) * 800;
+        this.size = isSuper ? Math.random() * 15 + 5 : Math.random() * 10 + 4;
+        this.color = color;
+        this.life = 1.0;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.type = type;
+    }
+    update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vy += 1500 * dt;
+        this.life -= (this.type === '1000' ? 0.4 : 1.2) * dt;
+        this.rotation += 5 * dt;
+    }
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size);
+        ctx.restore();
     }
 }
 
@@ -81,6 +117,16 @@ function playSound(type) {
         osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.1);
         gain.gain.setValueAtTime(0.06, now); gain.gain.linearRampToValueAtTime(0, now + 0.2);
         osc.start(); osc.stop(now + 0.2);
+    } else if (type === 'milestone1000') {
+        osc.type = 'square';
+        [523.25, 659.25, 783.99].forEach((f, i) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'square'; o.frequency.setValueAtTime(f, now + i * 0.1);
+            g.gain.setValueAtTime(0.05, now + i * 0.1); g.gain.linearRampToValueAtTime(0, now + i * 0.1 + 0.2);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(now + i * 0.1); o.stop(now + i * 0.1 + 0.2);
+        });
     } else if (type === 'gameover') {
         osc.type = 'sawtooth'; osc.frequency.setValueAtTime(220, now);
         osc.frequency.linearRampToValueAtTime(55, now + 0.6);
@@ -89,42 +135,22 @@ function playSound(type) {
     }
 }
 
-class Particle {
-    constructor(x, y, color, type) {
-        this.x = x; this.y = y;
-        const speedMult = type === '1000' ? 1.2 : 0.5;
-        this.vx = (Math.random() - 0.5) * 800 * speedMult;
-        this.vy = (Math.random() - 0.5) * 800 * speedMult;
-        this.size = Math.random() * 10 + 4;
-        this.color = color; this.life = 1.0;
-    }
-    update(dt) { 
-        this.x += this.vx * dt; this.y += this.vy * dt; 
-        this.vy += 1500 * dt; this.life -= 1.2 * dt; 
-    }
-    draw(ctx) {
-        ctx.save(); ctx.globalAlpha = Math.max(0, this.life);
-        ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.size, this.size);
-        ctx.restore();
-    }
-}
-
 function spawnCelebration(type) {
-    const colors = type === '1000' ? ['#FFD700', '#FF69B4', '#00FF7F', '#1E90FF'] : ['#FFF'];
-    const count = type === '1000' ? 100 : 15;
+    const isSuper = type === '1000';
+    const colors = isSuper ? ['#FFD700', '#FF69B4', '#00FF7F', '#1E90FF', '#FFFFFF'] : ['#FFF'];
+    const count = isSuper ? 120 : 15;
+    const virtualHeight = (window.innerHeight / renderScale) / worldScale;
+
     for (let i = 0; i < count; i++) {
-        particles.push(new Particle(
-            type === '1000' ? Math.random() * (baseWidth / worldScale) : playerX + scrollX,
-            type === '1000' ? -50 : playerY,
-            colors[Math.floor(Math.random() * colors.length)],
-            type
-        ));
+        const x = isSuper ? (Math.random() * (baseWidth / worldScale)) : playerX + scrollX;
+        const y = isSuper ? virtualHeight : playerY;
+        particles.push(new Particle(x, y, colors[Math.floor(Math.random() * colors.length)], type));
     }
 }
 
 class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
-function resize() { 
+function resize() {
     const dpr = window.devicePixelRatio || 1;
     canvas.width = window.innerWidth * dpr;
     canvas.height = window.innerHeight * dpr;
@@ -136,13 +162,9 @@ function resize() {
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
     currentSpeed = initialSpeed;
-    scoreScale = 1; platforms = []; particles = [];
-    
-    // 中央の座標を基準に設定
+    scoreScale = 1; platforms = []; particles = []; flashAlpha = 0;
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     const centerY = virtualHeight / 2;
-    
-    // 最初の足場を中央付近に配置
     platforms.push(new Platform(0, centerY, (baseWidth / worldScale) + 600));
     playerY = centerY - playerSize / 2;
     playerVY = 0; jumpCount = 0; isGameOver = false;
@@ -153,17 +175,12 @@ function generatePlatform() {
     let last = platforms[platforms.length - 1];
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     const centerY = virtualHeight / 2;
-    
     const speedFactor = currentSpeed / initialSpeed;
     let gap = (Math.random() * 320 + 180) * speedFactor;
-    
     let newX = last.x + last.w + gap;
     let newW = Math.random() * 450 + 200;
-    
-    // 画面中央から上下に±20%程度の範囲でランダムにする
     let range = virtualHeight * 0.2;
     let newY = Math.max(centerY - range, Math.min(centerY + range, last.y + (Math.random() * 260 - 130)));
-    
     platforms.push(new Platform(newX, newY, newW));
 }
 
@@ -189,12 +206,12 @@ function update(dt) {
 
     if (Math.floor(score / 1000) > Math.floor(lastMilestone / 1000)) {
         playSound('milestone1000'); spawnCelebration('1000');
-        scoreScale = 1.8; lastMilestone = score;
+        scoreScale = 2.0; lastMilestone = score;
     } else if (Math.floor(score / 100) > Math.floor(lastMilestone / 100)) {
         playSound('milestone100'); spawnCelebration('100');
         scoreScale = 1.4; lastMilestone = score;
     }
-    scoreScale += (1 - scoreScale) * 12 * dt; 
+    scoreScale += (1 - scoreScale) * 12 * dt;
 
     playerVY += gravity * dt;
     playerY += playerVY * dt;
@@ -203,10 +220,10 @@ function update(dt) {
     const virtualHeight = (window.innerHeight / renderScale) / worldScale;
     platforms.forEach(p => {
         let px = p.x - scrollX;
-        if (playerX + playerSize/2 > px && playerX - playerSize/2 < px + p.w) {
-            if (playerVY >= 0 && playerY + playerSize/2 <= p.y + playerVY * dt + 20 && playerY + playerSize/2 >= p.y - 20) {
+        if (playerX + playerSize / 2 > px && playerX - playerSize / 2 < px + p.w) {
+            if (playerVY >= 0 && playerY + playerSize / 2 <= p.y + playerVY * dt + 20 && playerY + playerSize / 2 >= p.y - 20) {
                 if (playerVY > 0) playSound('land');
-                playerY = p.y - playerSize/2; playerVY = 0; jumpCount = 0;
+                playerY = p.y - playerSize / 2; playerVY = 0; jumpCount = 0;
             }
         }
     });
@@ -214,13 +231,14 @@ function update(dt) {
     if (playerY > virtualHeight + 200) { isGameOver = true; playSound('gameover'); }
     if (platforms[platforms.length - 1].x - scrollX < (baseWidth / worldScale)) generatePlatform();
     particles = particles.filter(p => { p.update(dt); return p.life > 0; });
+    if (flashAlpha > 0) flashAlpha -= 1.5 * dt;
 }
 
 function draw() {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, baseWidth * renderScale, (window.innerHeight));
-    
+
     ctx.fillStyle = '#87CEEB';
     ctx.fillRect(0, 0, baseWidth * renderScale, window.innerHeight);
 
@@ -241,8 +259,12 @@ function draw() {
     ctx.save();
     ctx.translate(playerX, playerY);
     ctx.rotate(rotation);
-    ctx.fillStyle = '#FF6464';
-    ctx.fillRect(-playerSize / 2, -playerSize / 2, playerSize, playerSize);
+    if (playerImage.complete) {
+        ctx.drawImage(playerImage, -playerSize / 2, -playerSize / 2, playerSize, playerSize);
+    } else {
+        ctx.fillStyle = '#FF6464';
+        ctx.fillRect(-playerSize / 2, -playerSize / 2, playerSize, playerSize);
+    }
     ctx.restore();
     ctx.restore();
 
