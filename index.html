@@ -2,12 +2,39 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>箱跳ぶゲーム</title>
+    <meta name="viewport" content="width=540, height=960, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Unity WebGL | HakoTobu</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <script src="script.js"></script>
+    <div id="unity-container">
+        <canvas id="unity-canvas" width="540" height="960"></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-progress-bar-full"></div>
+        </div>
+    </div>
+    <script src="Build/deji_2dRun.loader.js"></script>
+    <script>
+        window.__GAME_ASSET_BASE__ = "Build/";
+        const unityCanvas = document.getElementById("unity-canvas");
+        const loadingBar = document.getElementById("unity-loading-bar");
+        const progressBarFull = document.getElementById("unity-progress-bar-full");
+        const config = {
+            dataUrl: "Build/deji_2dRun.data.gz",
+            frameworkUrl: "Build/deji_2dRun.framework.js.gz",
+            codeUrl: "Build/deji_2dRun.wasm.gz",
+            companyName: "nec",
+            productName: "deji_2dRun",
+            productVersion: "1.0.0"
+        };
+
+        createUnityInstance(unityCanvas, config, (progress) => {
+            progressBarFull.style.width = (100 * progress) + "%";
+        }).then(() => {
+            loadingBar.style.display = "none";
+        }).catch((message) => {
+            alert(message);
+        });
+    </script>
 </body>
 </html>

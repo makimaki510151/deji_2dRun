@@ -1,4 +1,4 @@
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('gameCanvas') || document.getElementById('unity-canvas');
 const ctx = canvas.getContext('2d');
 
 let audioCtx = null;
@@ -34,9 +34,19 @@ const maxSpeed = 1200;
 const gravity = 1800;
 const jumpPower = -750;
 const worldScale = 0.7;
+const targetWidth = 540;
+const targetHeight = 960;
+const embeddedPlayerPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJjSURBVHhe7ZjBbuMwEMX8/z+9iwA5eGfr0pae05FLAry0T4lsXopuf6QVW/2B/CwGaYZBmmGQZsSCbNv2j7+BO555+lPqpapPpD5jdYa50zdfriv1GaszTJ2uFznySdRnO3KU8ZMfuFxH6rMdOcr4yQ9criP12Y4cZfzkBy7XkfpsR44yfvJNvUj1idRnrM4wd/rmy3WlPmN1hrnTO5KXWoU7njnzKRLDIM0wSDMM0gyDNMMgzTBIMwzSDIM0wyDNMEgzDNKMpYKM/CNv5MxPssYt31z97+rVfQfWuOWb+oK/e8l19922E2vcckd9yV+96Pr7rzZdWeemO+rL3r/w+vOVYrxY67Y76ks/cjXWu/GO+vKrK7LmrXfUCCvHeLHuzXc8JcaLtW+/4wkxXqz/BA/DIM0wSDMM0oxbgtS/ep5smtgn1ov+VmeZ/oR6IZ17pcOn6yX0f0cYOlW/WI+9yuUT9QuVvcKldf0iPe9Zzi8NMu0Zzq2MEfEM51YGiUnwwhhRCV4YJCrBC4NEJXhhkKgELwwSleCFQaISvDBIVIIXBolK8MIgUQleGCQqwQuDRCV4YZCoBC8MEpXghUGiErwwSFSCFwaJSvDCIFEJXhgkKsELg0QleGGQqAQvDBKV4IVBohK8MEhUghcGiUrwwiBRCV4YJCrBC4NEJXhhkKgELwwSleCFQaISvDBIVIIXBolK8MIgUQleGCQqwQuDRCV4YZCoBC8MEpXghUGiErwwSFSCFwaJSvDCIFEJXhgkKsELg0QleGGQqAQvDBKV4IVBohK8MEhUghcGiUrwwiBRib9pJc533FyZMwAAAABJRU5ErkJggg==";
 
 const playerImage = new Image();
-playerImage.src = 'player.png';
+let playerImageReady = false;
+playerImage.onload = () => {
+    playerImageReady = true;
+};
+playerImage.onerror = () => {
+    playerImageReady = false;
+};
+playerImage.src = embeddedPlayerPng;
 
 function getSkyColor(currentScore) {
     const cycle = 2000;
@@ -226,10 +236,13 @@ class Platform { constructor(x, y, w) { this.x = x; this.y = y; this.w = w; } }
 
 function resize() {
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
-    canvas.style.width = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
+    const container = canvas.parentElement;
+    const viewportWidth = container ? container.clientWidth : targetWidth;
+    const viewportHeight = container ? container.clientHeight : targetHeight;
+    canvas.width = viewportWidth * dpr;
+    canvas.height = viewportHeight * dpr;
+    canvas.style.width = viewportWidth + 'px';
+    canvas.style.height = viewportHeight + 'px';
     // 前回のサイズ感の2倍にするため、baseWidthに対する比率を2倍にする
     renderScale = ((canvas.width / dpr) / baseWidth) * 2;
 }
@@ -353,7 +366,7 @@ function draw() {
     ctx.save();
     ctx.translate(playerX, playerY);
     ctx.rotate(rotation);
-    if (playerImage.complete) {
+    if (playerImageReady && playerImage.naturalWidth > 0) {
         ctx.drawImage(playerImage, -playerSize / 2, -playerSize / 2, playerSize, playerSize);
     } else {
         ctx.fillStyle = '#FF6464';
