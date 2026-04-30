@@ -600,16 +600,17 @@ function draw() {
         }
     } else {
         ctx.save();
-        ctx.translate(30, 40);
+        ctx.translate(baseWidth / 2, 24);
         ctx.scale(scoreScale, scoreScale);
         const s = score % 2000;
         ctx.fillStyle = scoreScale > 1.1 ? '#FFD700' : (s >= 1000 && s < 1500 ? '#FFF' : '#000');
-        ctx.font = 'bold 36px sans-serif';
-        ctx.textAlign = 'left';
+        ctx.font = 'bold 64px sans-serif';
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(`スコア: ${score}`, 0, 0);
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText(`残機: ${lives}`, 0, 42);
+        ctx.fillText(`スコア ${score}`, 0, 0);
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(`残機 ${lives} / ${MAX_LIVES}`, 0, 76);
         ctx.restore();
         if (isGameOver) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
