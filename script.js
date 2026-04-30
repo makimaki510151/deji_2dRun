@@ -6,6 +6,7 @@ const UNLOCK_QR_SECRET = 'deji_2dRun-unlock';
 
 const MAX_LIVES = 3;
 const STORAGE_KEY_LIVES = 'deji_2dRun_lives';
+const STORAGE_KEY_BEST_IN_SET = 'deji_2dRun_best_in_set';
 
 const canvas = document.getElementById('gameCanvas') || document.getElementById('unity-canvas');
 const ctx = canvas.getContext('2d');
@@ -43,7 +44,19 @@ function saveLives() {
     localStorage.setItem(STORAGE_KEY_LIVES, String(lives));
 }
 
+function loadBestInSet() {
+    const v = localStorage.getItem(STORAGE_KEY_BEST_IN_SET);
+    if (v === null) return 0;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function saveBestInSet() {
+    localStorage.setItem(STORAGE_KEY_BEST_IN_SET, String(bestScoreInSet));
+}
+
 let lives = loadLives();
+let bestScoreInSet = loadBestInSet();
 let scoreScale = 1;
 let lastTime = 0;
 let flashAlpha = 0;
@@ -284,7 +297,9 @@ function verifyUnlockPayload(text) {
 function tryUnlockFromString(raw) {
     if (!verifyUnlockPayload(raw)) return false;
     lives = MAX_LIVES;
+    bestScoreInSet = 0;
     saveLives();
+    saveBestInSet();
     resetGame();
     isStarted = false;
     isGameOver = false;
@@ -355,15 +370,36 @@ function openUnlockModal() {
         msg.textContent = 'カメラを使用できません。解除コードを入力してください。';
         return;
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        .then((stream) => {
-            qrStream = stream;
-            qrVideo.srcObject = stream;
-            qrVideo.play();
-            startQRScanLoop();
-        })
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        msg.textContent = 'このページはHTTPSまたはlocalhostで開いてください（カメラ使用に必要です）。';
+        return;
+    }
+
+    const attachStream = async (stream) => {
+        qrStream = stream;
+        qrVideo.srcObject = stream;
+        await new Promise((resolve) => {
+            if (qrVideo.readyState >= 1) return resolve();
+            qrVideo.onloadedmetadata = () => resolve();
+            setTimeout(resolve, 1200);
+        });
+        try {
+            await qrVideo.play();
+        } catch (e) {
+            // play() 失敗時でもストリームが生きていれば次フレームで表示される場合がある
+        }
+        startQRScanLoop();
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
+        .then(attachStream)
         .catch(() => {
-            msg.textContent = 'カメラを使用できません。解除コードを入力してください。';
+            // PC等で背面カメラ指定が失敗するケース向けフォールバック
+            return navigator.mediaDevices.getUserMedia({ video: true }).then(attachStream);
+        })
+        .catch((err) => {
+            const detail = err && err.name ? ` (${err.name})` : '';
+            msg.textContent = `カメラを使用できません${detail}。解除コードを入力してください。`;
         });
 }
 
@@ -469,7 +505,9 @@ function update(dt) {
         if (!isGameOver) {
             isGameOver = true;
             lives = Math.max(0, lives - 1);
+            bestScoreInSet = Math.max(bestScoreInSet, score);
             saveLives();
+            saveBestInSet();
             playSound('gameover');
         }
     }
@@ -563,7 +601,7 @@ function draw() {
             ctx.font = 'bold 60px sans-serif';
             ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
             ctx.font = '30px sans-serif';
-            ctx.fillText(`最終スコア: ${score}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            ctx.fillText(`最終スコア: ${bestScoreInSet}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
             if (lives > 0) {
                 ctx.fillText(`残り試行: ${lives} / ${MAX_LIVES}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
                 ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 120);
