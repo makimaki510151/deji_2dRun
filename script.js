@@ -618,18 +618,22 @@ function draw() {
             ctx.fillStyle = '#FFF';
             ctx.textAlign = 'center';
             ctx.font = 'bold 60px sans-serif';
-            ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
-            ctx.font = '30px sans-serif';
-            ctx.fillText(`最終スコア: ${bestScoreInSet}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            const centerY = (window.innerHeight / uiScale) / 2;
+            ctx.fillText('ゲームオーバー', baseWidth / 2, centerY - 130);
+            ctx.font = 'bold 48px sans-serif';
+            ctx.fillStyle = '#FFD700';
+            ctx.fillText(`最終スコア: ${bestScoreInSet}`, baseWidth / 2, centerY - 48);
+            ctx.fillStyle = '#FFF';
             if (lives > 0) {
-                ctx.fillText(`残り試行: ${lives} / ${MAX_LIVES}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
-                ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 120);
+                ctx.font = '32px sans-serif';
+                ctx.fillText(`残り試行: ${lives} / ${MAX_LIVES}`, baseWidth / 2, centerY + 20);
+                ctx.fillText('タップしてリトライ', baseWidth / 2, centerY + 72);
             } else {
                 ctx.font = 'bold 64px sans-serif';
-                ctx.fillText('プレイ上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 70);
+                ctx.fillText('プレイ上限に達しました', baseWidth / 2, centerY + 40);
                 ctx.font = '26px sans-serif';
-                ctx.fillText(`前回の最高スコア: ${bestScoreInSet}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 128);
-                ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 168);
+                ctx.fillText(`前回の最高スコア: ${bestScoreInSet}`, baseWidth / 2, centerY + 108);
+                ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, centerY + 148);
             }
         }
     }
