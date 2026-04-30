@@ -1,3 +1,12 @@
+/**
+ * 解除用QRコードの内容（この文字列をQRにエンコードしてください）
+ * 例: https://www.qr-code-generator.com/ 等で「テキスト」として設定
+ */
+const UNLOCK_QR_SECRET = 'deji_2dRun-unlock';
+
+const MAX_LIVES = 3;
+const STORAGE_KEY_LIVES = 'deji_2dRun_lives';
+
 const canvas = document.getElementById('gameCanvas') || document.getElementById('unity-canvas');
 const ctx = canvas.getContext('2d');
 
@@ -22,6 +31,19 @@ let jumpCount = 0;
 let rotation = 0;
 let isGameOver = false;
 let isStarted = false;
+
+function loadLives() {
+    const v = localStorage.getItem(STORAGE_KEY_LIVES);
+    if (v === null) return MAX_LIVES;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? Math.min(MAX_LIVES, Math.max(0, n)) : MAX_LIVES;
+}
+
+function saveLives() {
+    localStorage.setItem(STORAGE_KEY_LIVES, String(lives));
+}
+
+let lives = loadLives();
 let scoreScale = 1;
 let lastTime = 0;
 let flashAlpha = 0;
@@ -247,6 +269,114 @@ function resize() {
     renderScale = ((canvas.width / dpr) / baseWidth) * 2;
 }
 
+let qrModal = null;
+let qrVideo = null;
+let qrStream = null;
+let qrScanTimer = null;
+let barcodeDetector = null;
+
+function verifyUnlockPayload(text) {
+    const t = String(text || '').trim();
+    if (!t) return false;
+    return t === UNLOCK_QR_SECRET || t.includes(UNLOCK_QR_SECRET);
+}
+
+function tryUnlockFromString(raw) {
+    if (!verifyUnlockPayload(raw)) return false;
+    lives = MAX_LIVES;
+    saveLives();
+    resetGame();
+    isStarted = false;
+    isGameOver = false;
+    closeUnlockModal();
+    return true;
+}
+
+function ensureUnlockModal() {
+    if (qrModal) return;
+    qrModal = document.createElement('div');
+    qrModal.id = 'qr-unlock-modal';
+    qrModal.innerHTML = `
+      <video id="qr-video" playsinline webkit-playsinline autoplay muted></video>
+      <div class="qr-camera-overlay"></div>
+      <div class="qr-unlock-panel">
+        <p id="qr-unlock-msg">解除用QRコードをフレームに収めてください。</p>
+        <input type="text" id="qr-manual-input" placeholder="または解除コードを入力" autocomplete="off" />
+        <button type="button" class="btn-primary" id="qr-unlock-submit">解除を確定</button>
+        <button type="button" class="btn-secondary" id="qr-unlock-close">キャンセル</button>
+      </div>
+    `;
+    document.body.appendChild(qrModal);
+    qrVideo = qrModal.querySelector('#qr-video');
+    qrModal.querySelector('#qr-unlock-close').addEventListener('click', () => closeUnlockModal());
+    qrModal.querySelector('#qr-unlock-submit').addEventListener('click', () => {
+        const inp = qrModal.querySelector('#qr-manual-input');
+        if (tryUnlockFromString(inp.value)) inp.value = '';
+    });
+    if (typeof BarcodeDetector !== 'undefined') {
+        try {
+            barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
+        } catch (e) {
+            barcodeDetector = null;
+        }
+    }
+}
+
+function stopQRScanLoop() {
+    if (qrScanTimer) {
+        clearInterval(qrScanTimer);
+        qrScanTimer = null;
+    }
+}
+
+function startQRScanLoop() {
+    stopQRScanLoop();
+    if (!barcodeDetector || !qrVideo) return;
+    qrScanTimer = setInterval(() => {
+        if (!qrVideo || qrVideo.readyState < 2) return;
+        barcodeDetector.detect(qrVideo).then((codes) => {
+            for (const c of codes) {
+                if (tryUnlockFromString(c.rawValue)) return;
+            }
+        }).catch(() => {});
+    }, 280);
+}
+
+function openUnlockModal() {
+    ensureUnlockModal();
+    const msg = qrModal.querySelector('#qr-unlock-msg');
+    qrModal.classList.add('is-open');
+    if (!barcodeDetector) {
+        msg.textContent = '自動スキャンに非対応の環境です。解除コードを入力してください。';
+    } else {
+        msg.textContent = '解除用QRコードをフレームに収めてください。';
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        msg.textContent = 'カメラを使用できません。解除コードを入力してください。';
+        return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then((stream) => {
+            qrStream = stream;
+            qrVideo.srcObject = stream;
+            qrVideo.play();
+            startQRScanLoop();
+        })
+        .catch(() => {
+            msg.textContent = 'カメラを使用できません。解除コードを入力してください。';
+        });
+}
+
+function closeUnlockModal() {
+    stopQRScanLoop();
+    if (qrStream) {
+        qrStream.getTracks().forEach((t) => t.stop());
+        qrStream = null;
+    }
+    if (qrVideo) qrVideo.srcObject = null;
+    if (qrModal) qrModal.classList.remove('is-open');
+}
+
 function resetGame() {
     scrollX = 0; score = 0; lastMilestone = 0;
     currentSpeed = initialSpeed;
@@ -273,9 +403,18 @@ function generatePlatform() {
 }
 
 function handleAction() {
+    if (qrModal && qrModal.classList.contains('is-open')) return;
     if (!isStarted) {
+        if (lives <= 0) {
+            openUnlockModal();
+            return;
+        }
         isStarted = true; playerVY = jumpPower; jumpCount = 1; playSound('jump1');
     } else if (isGameOver) {
+        if (lives <= 0) {
+            openUnlockModal();
+            return;
+        }
         resetGame();
     } else if (jumpCount < 2) {
         playerVY = jumpPower; jumpCount++;
@@ -326,7 +465,14 @@ function update(dt) {
             }
         }
     });
-    if (playerY > virtualHeight + 200) { isGameOver = true; playSound('gameover'); }
+    if (playerY > virtualHeight + 200) {
+        if (!isGameOver) {
+            isGameOver = true;
+            lives = Math.max(0, lives - 1);
+            saveLives();
+            playSound('gameover');
+        }
+    }
     if (platforms[platforms.length - 1].x - scrollX < (baseWidth / worldScale)) generatePlatform();
     particles = particles.filter(p => { p.update(dt); return p.life > 0; });
     if (flashAlpha > 0) flashAlpha -= 1.5 * dt;
@@ -387,7 +533,15 @@ function draw() {
         ctx.font = 'bold 80px sans-serif';
         ctx.fillText('箱跳び', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
         ctx.font = '30px sans-serif';
-        ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 60);
+        if (lives <= 0) {
+            ctx.fillText('プレイ回数の上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            ctx.font = '26px sans-serif';
+            ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
+        } else {
+            ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            ctx.font = '26px sans-serif';
+            ctx.fillText(`残機: ${lives} / ${MAX_LIVES}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
+        }
     } else {
         ctx.save();
         ctx.translate(30, 40);
@@ -398,6 +552,8 @@ function draw() {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText(`スコア: ${score}`, 0, 0);
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText(`残機: ${lives}`, 0, 42);
         ctx.restore();
         if (isGameOver) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -408,7 +564,14 @@ function draw() {
             ctx.fillText('ゲームオーバー', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
             ctx.font = '30px sans-serif';
             ctx.fillText(`最終スコア: ${score}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
-            ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 100);
+            if (lives > 0) {
+                ctx.fillText(`残り試行: ${lives} / ${MAX_LIVES}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
+                ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 120);
+            } else {
+                ctx.font = '26px sans-serif';
+                ctx.fillText('プレイ回数の上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 70);
+                ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 115);
+            }
         }
     }
     ctx.restore();
