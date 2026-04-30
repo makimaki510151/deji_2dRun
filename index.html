@@ -30,8 +30,10 @@
 
         createUnityInstance(unityCanvas, config, (progress) => {
             progressBarFull.style.width = (100 * progress) + "%";
-        }).then(() => {
+        }).then((instance) => {
             loadingBar.style.display = "none";
+            // Unityroom 本番で JS から Unity 連携するために参照を公開
+            window.unityInstance = instance;
         }).catch((message) => {
             alert(message);
         });

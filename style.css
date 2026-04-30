@@ -78,11 +78,41 @@ html, body {
     z-index: 1;
     background: linear-gradient(
         to bottom,
-        rgba(0, 0, 0, 0.35) 0%,
-        rgba(0, 0, 0, 0.1) 35%,
-        rgba(0, 0, 0, 0.55) 100%
+        rgba(0, 0, 0, 0.2) 0%,
+        rgba(0, 0, 0, 0.06) 35%,
+        rgba(0, 0, 0, 0.45) 100%
     );
     pointer-events: none;
+}
+
+#qr-unlock-modal .qr-camera-status {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 2;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.58);
+    color: #fff;
+    font: 600 13px/1.2 sans-serif;
+}
+
+#qr-unlock-modal .qr-scan-guide {
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(62vw, 320px);
+    aspect-ratio: 1 / 1;
+    z-index: 2;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 14px;
+    box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.24);
+    pointer-events: none;
+}
+
+#qr-unlock-modal.camera-active .qr-scan-guide {
+    border-color: #66ff99;
 }
 
 #qr-unlock-modal .qr-unlock-panel {

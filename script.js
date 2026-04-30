@@ -323,6 +323,11 @@ function ensureUnlockModal() {
     `;
     document.body.appendChild(qrModal);
     qrVideo = qrModal.querySelector('#qr-video');
+    qrVideo.autoplay = true;
+    qrVideo.muted = true;
+    qrVideo.playsInline = true;
+    qrVideo.setAttribute('playsinline', '');
+    qrVideo.setAttribute('webkit-playsinline', '');
     qrModal.querySelector('#qr-unlock-close').addEventListener('click', () => closeUnlockModal());
     qrModal.querySelector('#qr-unlock-submit').addEventListener('click', () => {
         const inp = qrModal.querySelector('#qr-manual-input');
@@ -388,6 +393,7 @@ function openUnlockModal() {
         } catch (e) {
             // play() 失敗時でもストリームが生きていれば次フレームで表示される場合がある
         }
+        qrModal.classList.add('camera-active');
         startQRScanLoop();
     };
 
@@ -400,6 +406,7 @@ function openUnlockModal() {
         .catch((err) => {
             const detail = err && err.name ? ` (${err.name})` : '';
             msg.textContent = `カメラを使用できません${detail}。解除コードを入力してください。`;
+            qrModal.classList.remove('camera-active');
         });
 }
 
@@ -411,6 +418,7 @@ function closeUnlockModal() {
     }
     if (qrVideo) qrVideo.srcObject = null;
     if (qrModal) qrModal.classList.remove('is-open');
+    if (qrModal) qrModal.classList.remove('camera-active');
 }
 
 function resetGame() {
