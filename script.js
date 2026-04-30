@@ -366,6 +366,12 @@ function openUnlockModal() {
     ensureUnlockModal();
     const msg = qrModal.querySelector('#qr-unlock-msg');
     qrModal.classList.add('is-open');
+    qrModal.style.display = 'flex';
+    qrModal.style.position = 'fixed';
+    qrModal.style.inset = '0';
+    qrModal.style.zIndex = '2147483647';
+    qrModal.style.background = '#000';
+    if (canvas) canvas.style.visibility = 'hidden';
     if (!barcodeDetector) {
         msg.textContent = '自動スキャンに非対応の環境です。解除コードを入力してください。';
     } else {
@@ -419,6 +425,8 @@ function closeUnlockModal() {
     if (qrVideo) qrVideo.srcObject = null;
     if (qrModal) qrModal.classList.remove('is-open');
     if (qrModal) qrModal.classList.remove('camera-active');
+    if (qrModal) qrModal.style.display = 'none';
+    if (canvas) canvas.style.visibility = 'visible';
 }
 
 function resetGame() {
@@ -580,9 +588,11 @@ function draw() {
         ctx.fillText('箱跳び', baseWidth / 2, (window.innerHeight / uiScale) / 2 - 40);
         ctx.font = '30px sans-serif';
         if (lives <= 0) {
-            ctx.fillText('プレイ回数の上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
+            ctx.font = 'bold 64px sans-serif';
+            ctx.fillText('プレイ上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
             ctx.font = '26px sans-serif';
-            ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
+            ctx.fillText(`前回の最高スコア: ${bestScoreInSet}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 92);
+            ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 132);
         } else {
             ctx.fillText('タップしてスタート', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 30);
             ctx.font = '26px sans-serif';
@@ -614,9 +624,11 @@ function draw() {
                 ctx.fillText(`残り試行: ${lives} / ${MAX_LIVES}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 75);
                 ctx.fillText('タップしてリトライ', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 120);
             } else {
+                ctx.font = 'bold 64px sans-serif';
+                ctx.fillText('プレイ上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 70);
                 ctx.font = '26px sans-serif';
-                ctx.fillText('プレイ回数の上限に達しました', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 70);
-                ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 115);
+                ctx.fillText(`前回の最高スコア: ${bestScoreInSet}`, baseWidth / 2, (window.innerHeight / uiScale) / 2 + 128);
+                ctx.fillText('タップして解除用QRを読み取る', baseWidth / 2, (window.innerHeight / uiScale) / 2 + 168);
             }
         }
     }
